@@ -3,11 +3,12 @@ name = "aomr-modding"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "Aravind-Sundararajan",email = "aravind.sundararajan@protonmail.com"}
+    {name = "Robert Shultz",email = "chaosrobie@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "numpy>=1.21.0",
 ]
 
 [tool.poetry]
