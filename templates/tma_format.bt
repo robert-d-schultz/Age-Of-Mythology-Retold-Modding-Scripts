@@ -1,0 +1,172 @@
+string Normalize524288( float f )
+{
+    float foo = ((f) / 524288) * (1/Sqrt(2));
+    string s;
+    return SPrintf(s, "%.3f", foo);
+}
+
+typedef struct {
+    float x;
+    float y;
+    float z;
+} Position;
+
+typedef struct { //Quaternion, fourth component reconstructed
+    uint64 a : 19<comment=Normalize524288>;
+    uint64 a_sign : 1<hidden=false>;
+    uint64 b : 19<comment=Normalize524288>;
+    uint64 b_sign : 1<hidden=false>;
+    uint64 c : 19<comment=Normalize524288>;
+    uint64 c_sign : 1<hidden=false>;
+    uint64 reconstruct_index : 2;  //Index of the reconstructed component (backwards)
+    uint64 unknown : 2;      //No idea, could just be padding
+    Assert (unknown == 0); //always 0?
+} Rotation;
+
+typedef struct {
+    
+    //HEADER
+    uint32 magicnumber; //BTMA
+    Assert(magicnumber == 1095586882);
+    uint32 version; //12 
+    Assert(version == 12);
+    uint16 thing; //DP
+    Assert(thing == 20548);
+    
+    //Import Crap, this stuff doesn't matter
+    int32 import_crap_bytelength<hidden=true>;
+    typedef struct {
+        uint32 string_length<hidden=true>;
+        wchar_t the_string[string_length];
+        uchar stuff[16];
+    } ImportCrap <optimize=false>;
+    int32 import_crap_count;
+    ImportCrap import_craps[import_crap_count];
+    
+    
+    //Useful stuff
+    uint32 active_bone_count;
+    uint32 frame_count;
+    float animation_playtime; //seconds?
+    //Assert(Abs((frame_count / animation_playtime) - 30) < 0.001); //70FPS in unit animations??
+
+    
+    Position root_position; //Root offset from origin
+    Position root_position2; //second copy? but not always? anutbite_idle_a has it 0.02 higher... weird
+    
+    uint32 bone_count;
+    
+    uint32 num_attachments;
+    
+    //BONES
+    typedef struct {
+        uint32 bone_name_length<hidden=true>;
+        wchar_t bone_name[bone_name_length];    
+        int32 parent_id;
+        float parent_space_matrix1[16];
+        float world_space_matrix[16];
+        float something_space_matrix3[16];
+    } Bone <optimize=false>;
+    Bone bones[bone_count];
+            
+            
+    //ANIMATION DATA
+    typedef struct {
+        uint32 bone_name_length<hidden=true>;
+        wchar_t bone_name[bone_name_length];
+        
+        
+        ubyte some_one;
+        Assert (some_one == 1); //always 1?
+        
+        ubyte position_mode; //1=normal, 0=static position
+        Assert (position_mode == 0 || position_mode == 1);
+        ubyte rotation_mode; //3=normal, 0=static rotation
+        Assert (rotation_mode == 0 || rotation_mode == 3);
+        
+        ubyte unknown_thing;
+        Assert(unknown_thing == 0); //always 0?
+        
+        //1-1-3-0
+        //Full position, full rotation
+        //1-0-0-0
+        //No position, no rotation
+        //1-0-3-0
+        //No position, full rotation
+        //1-1-0-0
+        //Full position, no? rotation
+        
+        
+        uint32 frame_count;
+        
+        //position
+        if (position_mode == 0) {
+            float static_pos_x;
+            float static_pos_y;
+            float static_pos_z;
+            float static_pos_one; //Always 1?
+            Assert(Abs(pos_float4-1) < 0.001);
+        }
+        else if (position_mode == 1) {
+            uint32 positiondata_bytelength<hidden=true>;
+            Position frame_positions[frame_count];
+        }
+        else {
+        }
+        
+        //rotation
+        if (rotation_mode == 0){
+            float static_rot_w;
+            float static_rot_z;
+            float static_rot_y;
+            float static_rot_x;
+            Assert(Abs((Pow(static_rot_w,2) + Pow(static_rot_z,2) + Pow(static_rot_y,2) + Pow(static_rot_x,2))-1) < 0.001);
+        }
+        else if (rotation_mode == 3) {
+            uint32 rotationdata_bytelength<hidden=true>;
+            Rotation frame_rotations[frame_count];
+        }
+        else {
+        }
+        
+        //No idea, but these are always 1, with some floating point error
+        //Something with interpolation at the lead-in and lead-out?
+        //They'd be like slope of the tangents, maybe
+        float weird_end_float1; //1
+        float weird_end_float2; //1
+        float weird_end_float3; //1
+        float weird_end_float4; //1
+        Assert(Abs(weird_end_float1-1) < 0.001);
+        Assert(Abs(weird_end_float2-1) < 0.001);
+        Assert(Abs(weird_end_float3-1) < 0.001);
+        Assert(Abs(weird_end_float4-1) < 0.001);
+        
+    } AnimationData <optimize=false>;
+    AnimationData animation_data[active_bone_count];
+    
+    
+    //ATTACHMENTS
+    //Only seen this on siege weapon so far
+    uint32 attachment_count;
+    Assert(attachment_count == num_attachments); //should match above?
+    typedef struct {
+        uint32 parent_bone_id; //guess
+        float time; //Doesn't make sense as seconds, % of overall frames?
+        
+        uint32 zero1;
+        Assert(zero1 == 0); //always zero?
+        uint32 zero2;
+        Assert(zero2 == 0); //always zero?
+        ubyte some_bool; //"visible" or something?
+        
+        uint32 attachment_name_length<hidden=true>;
+        wchar_t attachment_name[attachment_name_length];
+    } AttachmentData <optimize=false>;
+    AttachmentData attachment_data[attachment_count];
+        
+    uint32 zero3;
+    Assert(zero3 == 0); //always zero?
+    
+} TMA;
+
+TMA tma;
