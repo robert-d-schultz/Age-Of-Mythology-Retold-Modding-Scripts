@@ -1,0 +1,8 @@
+# Age of Mythology Retold Modding Tools - Dependencies
+# Install these in Blender's Python environment if needed
+
+# Core dependencies
+numpy>=1.21.0
+
+# Note: mathutils is included with Blender and doesn't need to be installed separately
+# Note: bpy (Blender Python API) is included with Blender and doesn't need to be installed separately 

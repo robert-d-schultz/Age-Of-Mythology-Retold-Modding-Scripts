@@ -1,0 +1,131 @@
+[project]
+name = "aomr-modding"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Robert Shultz",email = "chaosrobie@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=1.21.0",
+]
+
+[tool.poetry]
+packages = [{include = "aomr_modding", from = "src"}]
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+ruff = "^0.12.2"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+# Target Python version
+target-version = "py313"
+
+# Line length for formatting and linting
+line-length = 88
+
+# Indent with spaces
+indent-width = 4
+
+[tool.ruff.lint]
+# Enable all rules by default
+select = ["ALL"]
+
+# Ignore specific rules that might be too strict for your use case
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D104",  # Missing docstring in public package
+    "D105",  # Missing docstring in magic method
+    "D106",  # Missing docstring in public nested class
+    "D107",  # Missing docstring in __init__
+    "D200",  # One-line docstring should fit on one line
+    "D201",  # No blank lines allowed before function docstring
+    "D202",  # No blank lines allowed after function docstring
+    "D203",  # 1 blank line required before class docstring
+    "D204",  # 1 blank line required after class docstring
+    "D205",  # 1 blank line required between summary line and description
+    "D206",  # Docstring should be indented with spaces, not tabs
+    "D207",  # Docstring is under-indented
+    "D208",  # Docstring is over-indented
+    "D209",  # Multi-line docstring closing quotes should be on a separate line
+    "D210",  # No whitespaces allowed surrounding docstring text
+    "D211",  # No blank lines allowed before class docstring
+    "D212",  # Multi-line docstring summary should start at the first line
+    "D213",  # Multi-line docstring summary should start at the second line
+    "D214",  # Section is over-indented
+    "D215",  # Section underline is over-indented
+    "D300",  # Use """triple double quotes"""
+    "D301",  # Use r""" if any backslashes in a docstring
+    "D400",  # First line should end with a period
+    "D401",  # First line should be in imperative mood
+    "D402",  # First line should not be the function's signature
+    "D403",  # First word of the first line should be properly capitalized
+    "D404",  # First word of the docstring should not be This
+    "D405",  # Section name should be properly capitalized
+    "D406",  # Section name should end with a newline
+    "D407",  # Missing dashed underline after section
+    "D408",  # Section underline should be in the line following the section's name
+    "D409",  # Section underline should match the length of its name
+    "D410",  # Missing blank line after section
+    "D411",  # Missing blank line before section
+    "D412",  # No blank lines allowed between a section header and its content
+    "D413",  # Missing blank line after last section
+    "D414",  # Section has no content
+    "D415",  # First line should end with a period, question mark, or exclamation point
+    "D416",  # Section name should end with a colon
+    "D417",  # Missing argument descriptions in the docstring
+    "D418",  # Missing type annotations for documented function parameters
+    "D419",  # Non-empty __init__ docstring
+    "E501",  # Line too long (handled by formatter)
+    "W191",  # Indentation contains tabs
+    "COM812",  # Missing trailing comma (conflicts with formatter)
+]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings. Markdown,
+# reStructuredText code/literal blocks and doctests are all supported.
+docstring-code-format = true
+
+[tool.ruff.lint.isort]
+# Like `isort`, sort imports alphabetically within each section.
+force-sort-within-sections = true
+
+# Like `isort`, use a single import line per package.
+force-single-line = false
+
+# Like `isort`, treat `from` imports more strictly.
+force-wrap-aliases = true
+
+# Like `isort`, set known first-party modules.
+known-first-party = ["aomr_modding"]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore specific rules for specific files
+"__init__.py" = ["F401"]
