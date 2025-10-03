@@ -298,57 +298,69 @@ def read_tmm_data(tmm_data_filename, num_vertices, num_triangles, mesh_group_lis
                 vertex_list.append((x, z, y))
                 uv_list.append((u, 1-v))
 
-
-
-                #Normals are NOT SOLVED AAAAAAAAHHHHHHHHHH!!!!!
                 
-                def invert_15_bits(raw):
-                    # Convert to 16-bit int
-                    val = int.from_bytes(raw, byteorder='little')
-                    # Preserve bit 15 (0x8000), invert the rest
-                    val = (val & 0x8000) | (~val & 0x7FFF)
-                    return val.to_bytes(2, byteorder='little')
+                #Normals/Tangents/Bitangents
+                def u15_to_float_signed(v):
+                    # Map unsigned 0..32767 to -1..+1
+                    return (v / 32767.0) * 2.0 - 1.0
                 
-                n_raw = tmm_data_file.read(2)
-                if (n_raw[1] & 0x40) != 0:
-                    n_raw = invert_15_bits(n_raw)
+                def quat_from_packed(u16_x, u16_y, u16_z, handedness_bit):
+                    # Extract 15-bit payloads (low 15 bits of each u16)
+                    x_raw = u16_x & 0x7FFF
+                    y_raw = u16_y & 0x7FFF
+                    z_raw = u16_z & 0x7FFF
 
-                t_raw = tmm_data_file.read(2)
-                if (t_raw[1] & 0x40) != 0:
-                    t_raw = invert_15_bits(t_raw)
+                    # Map to [-1, +1]
+                    x = u15_to_float_signed(x_raw)
+                    y = u15_to_float_signed(y_raw)
+                    z = u15_to_float_signed(z_raw)
 
-                b_raw = tmm_data_file.read(2)
-                if (b_raw[1] & 0x40) != 0:
-                    b_raw = invert_15_bits(b_raw)
+                    # Reconstruct w from unit quaternion constraint. handedness_bit encodes sign of w.
+                    w_sq = 1.0 - (x*x + y*y + z*z)
+                    w = math.sqrt(max(0.0, w_sq))
+                    if handedness_bit:
+                        w = -w
 
-                norm_raw_list.append(n_raw + t_raw + b_raw)
-                                
+                    # Normalize quaternion to be safe
+                    mag = math.sqrt(x*x + y*y + z*z + w*w)
+                    if mag > 0.0:
+                        x /= mag; y /= mag; z /= mag; w /= mag
+
+                    return (x, y, z, w)
                 
-                norm_raw = struct.unpack("H", n_raw)[0]
-                tan_raw = struct.unpack("H", t_raw)[0]
-                bitan_raw = struct.unpack("H", b_raw)[0]
+                def quat_to_matrix(q):
+                    x, y, z, w = q
+                    # Standard quaternion -> rotation matrix (column-major: columns are rotated basis vectors)
+                    xx = x*x; yy = y*y; zz = z*z
+                    xy = x*y; xz = x*z; yz = y*z
+                    wx = w*x; wy = w*y; wz = w*z
 
-                def unpack_and_normalize(value):
-                    # 7 bits for first, 7 bits for second, 2 bits for the remainder
-                    a = value & 0x7F             # bits 0–6
-                    b = (value >> 7) & 0x7F      # bits 7–13
-                    c = (value >> 14) & 0x03   # bits 14–15 (ignored)
-                    return a / 127.0, b / 127.0, c
-                
-                norm_a, norm_b, norm_c = unpack_and_normalize(norm_raw)
-                tan_a, tan_b, tan_c = unpack_and_normalize(tan_raw)
-                bitan_a, bitan_b, bitan_c = unpack_and_normalize(bitan_raw)                
-                
-                (norm_x, norm_y, norm_z) = oct_decode(norm_a, norm_b) * (1 if norm_c == 0 else -1)
-                (tan_x, tan_y, tan_z) = oct_decode(tan_a, tan_b) * (1 if tan_c == 0 else -1)
-                (bitan_x, bitan_y, bitan_z) = oct_decode(bitan_a, bitan_b) * (1 if bitan_c == 0 else -1)
-                
-                #Junk normals for now
-                norm_list.append((0, 0, 0))
+                    # 3x3 matrix as tuple of 3 column vectors (each a tuple)
+                    # column0 = matrix * (1,0,0) etc.
+                    col0 = (1 - 2*(yy + zz), 2*(xy + wz),     2*(xz - wy))
+                    col1 = (2*(xy - wz),     1 - 2*(xx + zz), 2*(yz + wx))
+                    col2 = (2*(xz + wy),     2*(yz - wx),     1 - 2*(xx + yy))
 
-        
-        
-        
+                    return (col0, col1, col2)
+                
+                def basis_from_quat(q):
+                    col0, col1, col2 = quat_to_matrix(q)
+                    tangent   = col0   # rotated X axis
+                    bitangent = col1   # rotated Y axis
+                    normal    = col2   # rotated Z axis
+                    return tangent, bitangent, normal                
+                
+                raw = tmm_data_file.read(6)
+                if len(raw) != 6:
+                    raise EOFError("not enough data")
+                u16_x, u16_y, u16_z = struct.unpack('<HHH', raw)
+                
+                handedness = (u16_x >> 15) & 0x1
+                
+                q = quat_from_packed(u16_x, u16_y, u16_z, handedness)
+                _, _, normal = basis_from_quat(q) #don't care about (bi)tangents
+                
+                norm_list.append((normal[0], normal[2], normal[1])) #swap z and y    
         
         
         #Triangles
@@ -479,4 +491,5 @@ for attachment in attachments:
     #print(world_space_mat)
     
     empty.matrix_local = world_space_mat
+
     
