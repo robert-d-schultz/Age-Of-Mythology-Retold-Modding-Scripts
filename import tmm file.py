@@ -12,7 +12,6 @@ os.system("cls")
 #TODO:
 #Building attachments no worky
 #And look into attachments scaling and stuff by the main_matrix
-#And... normals don't import (use Blender's autosmooth instead)
 
 
 #This script expects a .tmm.data file in the same directory
@@ -493,3 +492,4 @@ for attachment in attachments:
     empty.matrix_local = world_space_mat
 
     
+
