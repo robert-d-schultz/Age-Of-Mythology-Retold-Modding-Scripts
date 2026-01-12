@@ -236,28 +236,56 @@ def setup_armature(tmm_data_filename, bone_list):
     for i, bone in enumerate(bone_list):
         bone_name, parent_index, world_space_mat, radius = bone
         print(f"  Bone: {bone_name}")
-        
+
         world_space_mat = Matrix(np.array(world_space_mat).reshape(4, 4))
         world_space_mat.transpose()
-        
+
         ebs = armature.edit_bones
-        try:
-            eb = ebs[bone_name]
-        except KeyError:
-            print(f"    Not in the armature, adding")
+
+        # find all existing bones with this name
+        candidates = [b for b in ebs if b.name == bone_name]
+
+        eb = None
+
+        if not candidates:
+            # no bone with this name at all
+            print("    Not in the armature, adding")
             eb = ebs.new(bone_name)
-            
+
+        else:
+            # at least one bone with this name exists → check parent
+            print("    Found bone(s) with same name, checking parent")
+
+            expected_parent = None
+            if parent_index >= 0:
+                try:
+                    expected_parent = armature.edit_bones[parent_index]
+                except Exception:
+                    expected_parent = None
+
+            for c in candidates:
+                if c.parent is expected_parent:
+                    eb = c
+                    print("    Parent matches, overwriting existing bone")
+                    break
+
+            if eb is None:
+                # same name exists, but none match the parent → different bone
+                eb = ebs.new(bone_name)
+                print(f"    Parent does not match, creating new bone '{eb.name}'")
+
         eb.head_radius = radius
         eb.tail_radius = radius
         eb.tail = (0.0, 0.2, 0.0)
-        
+
         if parent_index >= 0:
-            eb.parent = armature.edit_bones[parent_index]
-        else:
-            pass
-        
+            try:
+                eb.parent = armature.edit_bones[parent_index]
+            except Exception:
+                pass
+
         eb.matrix = main_matrix_inverted @ world_space_mat
-        
+
     bpy.ops.object.mode_set(mode='OBJECT')
     
     return armature_object
@@ -289,14 +317,13 @@ def read_tmm_data(tmm_data_filename, num_vertices, num_triangles, mesh_group_lis
         vertex_list = []
         uv_list = []
         norm_list = []
-        norm_raw_list = []
         for i, mesh_group in enumerate(mesh_group_list):
             print(f"Mesh group {i}, {mesh_group[0]} vertices")
             for j in range(mesh_group[0]):
                 x, y, z, u, v  = struct.unpack("<eeeee", tmm_data_file.read(10))
-                vertex_list.append((x, z, y))
-                uv_list.append((u, 1-v))
-
+                vertex_list.append((x, z, y)) #swap z and y
+                uv_list.append((u, 1-v))      #flip v
+                
                 
                 #Normals/Tangents/Bitangents
                 def u15_to_float_signed(v):
@@ -359,8 +386,8 @@ def read_tmm_data(tmm_data_filename, num_vertices, num_triangles, mesh_group_lis
                 q = quat_from_packed(u16_x, u16_y, u16_z, handedness)
                 _, _, normal = basis_from_quat(q) #don't care about (bi)tangents
                 
-                norm_list.append((normal[0], normal[2], normal[1])) #swap z and y    
-        
+                norm_list.append((normal[0], normal[2], normal[1])) #swap z and y
+                
         
         #Triangles
         print(str(num_triangles) + " Triangles")
@@ -490,6 +517,4 @@ for attachment in attachments:
     #print(world_space_mat)
     
     empty.matrix_local = world_space_mat
-
     
-

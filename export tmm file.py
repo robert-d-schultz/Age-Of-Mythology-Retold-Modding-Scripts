@@ -10,8 +10,8 @@ import re
 os.system("cls")
 
 #TODO
-#Normal vectors are not understooad, so I'm forced to export junk
-#Vertex optimization needs to be looked at once normal vectors are understood
+#Normals are understooad, but I'm lazy, so this is exporting junk BNT
+#Vertex optimization needs to be looked at once proper BNT handling is implemented
 
 
 tmm_output_filename = "./output.tmm"
@@ -29,20 +29,14 @@ if arm_mod:
     armature_object = arm_mod.object
     armature = armature_object.data
     bone_name_to_id = {b.name: i for i, b in enumerate(armature.bones)}
-    
 
-
-    
 #Convert between z-up, righthanded and y-up, lefthanded
 zup_to_yup = Matrix(np.array([
     [  1,  0,  0,  0],
     [  0,  0,  1,  0],
     [  0,  1,  0,  0],
     [  0,  0,  0,  1]
-]))    
-
-
-
+]))
 
 with open(tmm_output_filename, "wb") as tmm_file:
     me = ob.data
@@ -81,30 +75,72 @@ with open(tmm_output_filename, "wb") as tmm_file:
         for tri_index in tri_indices:
             tri = me.polygons[tri_index]
             
-            winding_order = ((tri.vertices[0] > tri.vertices[1]) and (tri.vertices[1] > tri.vertices[2]) or
-                (tri.vertices[1] > tri.vertices[2]) and (tri.vertices[2] > tri.vertices[0]) or 
-                (tri.vertices[2] > tri.vertices[0]) and (tri.vertices[0] > tri.vertices[1]))
-            
             triangle_vert_indices = [0, 0, 0]
             for i, loop_index in enumerate(tri.loop_indices):
                 loop = me.loops[loop_index]
                 vert_index = loop.vertex_index
                 vert = me.vertices[vert_index]
                 
-                #uv
+                
+                
+                #UV
                 uv = None
                 if me.uv_layers.active is not None:
                     uv = me.uv_layers.active.data[loop_index].uv
                 
                 
                 
-                #normals, I don't understand
-                n = loop.normal
+                #Normals/Tangents/Bitangents
                 t = loop.tangent
-                b = loop.bitangent                
+                b = loop.bitangent
+                n = loop.normal
+
+                # build 3x3 rotation matrix columns (tangent, bitangent, normal)
+                m00, m10, m20 = t.x, t.y, t.z
+                m01, m11, m21 = b.x, b.y, b.z
+                m02, m12, m22 = n.x, n.y, n.z
+
+                trace = m00 + m11 + m22
+                if trace > 0.0:
+                    s = 0.5 / math.sqrt(trace + 1.0)
+                    w = 0.25 / s
+                    x = (m21 - m12) * s
+                    y = (m02 - m20) * s
+                    z = (m10 - m01) * s
+                else:
+                    if m00 > m11 and m00 > m22:
+                        s = 2.0 * math.sqrt(1.0 + m00 - m11 - m22)
+                        x = 0.25 * s
+                        y = (m01 + m10) / s
+                        z = (m02 + m20) / s
+                        w = (m21 - m12) / s
+                    elif m11 > m22:
+                        s = 2.0 * math.sqrt(1.0 + m11 - m00 - m22)
+                        x = (m01 + m10) / s
+                        y = 0.25 * s
+                        z = (m12 + m21) / s
+                        w = (m02 - m20) / s
+                    else:
+                        s = 2.0 * math.sqrt(1.0 + m22 - m00 - m11)
+                        x = (m02 + m20) / s
+                        y = (m12 + m21) / s
+                        z = 0.25 * s
+                        w = (m10 - m01) / s
+
+                # normalize for safety
+                mag = math.sqrt(x*x + y*y + z*z + w*w)
+                if mag > 0.0:
+                    x /= mag
+                    y /= mag
+                    z /= mag
+                    w /= mag
+
+                # pack quaternion into the desired tuple
+                ntb_quat = (x, y, z, 1 if w < 0.0 else 0)
                 
                 
-                #weights
+                
+                #Weights
                 weight_items = []
                 if armature_object is not None:
                     for g in vert.groups:
@@ -122,7 +158,7 @@ with open(tmm_output_filename, "wb") as tmm_file:
                 
                 
                 #candidate
-                canon_vertex_candidate = (vert.co, uv, n, t, b, weight_items)
+                canon_vertex_candidate = (vert.co, uv, ntb_quat, weight_items)
                 #print(canon_vertex_candidate)
                 
                 #see if already exists
@@ -138,6 +174,8 @@ with open(tmm_output_filename, "wb") as tmm_file:
         mesh_groups.append((mat_index, canon_vertex_list, triangle_list))
         total_vertices += len(canon_vertex_list)
         total_triangles += len(triangle_list)
+    
+    
     
     
     
@@ -295,7 +333,7 @@ with open(tmm_output_filename, "wb") as tmm_file:
         bones = armature.bones
         for bone in bones:
             print(f"  Bone: {bone.name}")
-            s3 = bone.name
+            s3 = re.sub(r'\.\d{3}$', '', bone.name) #strip away .001, etc. that were inserted by the importer (if present)
             s3_e = bytes(s3,"UTF-16LE")
             tmm_file.write(struct.pack("<L%ds" % (len(s3_e),), len(s3), s3_e))
             
@@ -313,9 +351,9 @@ with open(tmm_output_filename, "wb") as tmm_file:
             
             #I don't really get it, but apply this to the root bones
             #if parent_index == -1:
-            print(world_space_mat)
-            print(main_matrix)
-            print(world_space_mat @ main_matrix)
+            #print(world_space_mat)
+            #print(main_matrix)
+            #print(world_space_mat @ main_matrix)
             world_space_mat = main_matrix @ world_space_mat
             
             world_space_mat_list = [f for row in world_space_mat.transposed() for f in row]
@@ -368,23 +406,28 @@ with open(tmm_output_filename, "wb") as tmm_file:
         for mesh_group in mesh_groups:
             vert_list = mesh_group[1]
             for vert in vert_list:
-                (coord, uv, _,_,_, _) = vert
+                (coord, uv, ntb_quat, _) = vert
                 
-                #position
+                #Position
                 x,y,z = coord
                 
-                #uv
+                #UV
                 u, v = 0, 0
                 if uv is not None:
-                    u, v = uv
+                    u, v = uv                    
+                    
+                #Normals and such
+                x_quat, y_quat, z_quat, w_sign = ntb_quat
+                x_quat_u16 = int(round(((x_quat + 1.0) * 0.5) * 32767.0)) & 0x7FFF
+                y_quat_u16 = int(round(((y_quat + 1.0) * 0.5) * 32767.0)) & 0x7FFF
+                z_quat_u16 = int(round(((z_quat + 1.0) * 0.5) * 32767.0)) & 0x7FFF
+                if w_sign:
+                    x_quat_u16 |= 0x8000
                 
-                #n, t, bt = 16383,16383,16383 #blender-y-facing
-                n, t, bt = 8191,24575,24575   #blender-z-facing
-                #I dunno what's going on here, but this supposedly z-facing thing looks pretty good in-game (okay, not really)
-                
-                tmm_data_file.write(struct.pack('<eee', x, z, y))  #-x, y and z swapped
+                                
+                tmm_data_file.write(struct.pack('<eee', x, z, y))  #y and z swapped
                 tmm_data_file.write(struct.pack('<ee', u, 1-v))    #v inverted
-                tmm_data_file.write(struct.pack('<HHH', n, t, bt))
+                tmm_data_file.write(struct.pack('<HHH', x_quat_u16, y_quat_u16, z_quat_u16))
 
 
         #Triangles
@@ -400,7 +443,7 @@ with open(tmm_output_filename, "wb") as tmm_file:
             for mesh_group in mesh_groups:
                 vert_list = mesh_group[1]
                 for vert in vert_list:
-                    (_, _, _,_,_, weights) = vert
+                    (_, _, _, weights) = vert
 
                     padded_bws = [(0, 0)] * (4 - len(weights)) + weights
 
@@ -413,5 +456,5 @@ with open(tmm_output_filename, "wb") as tmm_file:
         for mesh_group in mesh_groups:
             vert_list = mesh_group[1]
             for vert in vert_list:
-                (coord, _, _,_,_, _) = vert
+                (coord, _, _, _) = vert
                 tmm_data_file.write(struct.pack('<e', coord[1]))
